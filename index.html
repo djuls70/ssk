@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ССК: Цифровой замер — Полевой планшетный терминал v2.5</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            clay: {
+              50: '#fdf8f6',
+              100: '#f2e8e5',
+              200: '#eaddd7',
+              500: '#c25e38',
+              600: '#a84d2a',
+              700: '#8c3c1e',
+            },
+            slateCustom: {
+              850: '#14171c',
+              900: '#0e1115',
+              950: '#090b0d',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #07090b;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    
+    /* Clean custom scrollbar for tablet views */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.4);
+    }
+
+    /* Laser scanner wave animation */
+    @keyframes sweep-beam {
+      0% { top: 2%; opacity: 0.2; }
+      50% { opacity: 0.95; }
+      100% { top: 98%; opacity: 0.2; }
+    }
+    .scanner-sweep-beam {
+      animation: sweep-beam 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+    }
+
+    /* Smooth touch tap feedback */
+    .tap-bounce:active {
+      transform: scale(0.98);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-1 sm:p-4 md:p-6 selection:bg-clay-500 selection:text-white">
+
+  <!-- TABLET HARDWARE HOUSING (IPAD PRO / SURFACE ARCHITECTURAL CHASSIS) -->
+  <div class="w-full max-w-5xl bg-slateCustom-900 rounded-[1.75rem] sm:rounded-[2.5rem] p-2 sm:p-4 shadow-2xl border border-white/10 flex flex-col h-[98vh] max-h-[960px] overflow-hidden relative">
+    
+    <!-- TOP STATUS BAR & ROLE ISOLATION INDICATORS -->
+    <header class="flex items-center justify-between px-3 py-2 text-xs shrink-0 select-none border-b border-white/5 mb-1.5">
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <span class="w-2.5 h-2.5 rounded-full bg-clay-500 animate-pulse"></span>
+        <span class="font-mono text-[11px] tracking-wider uppercase text-zinc-300 font-semibold">ССК • ТЕРМИНАЛ</span>
+        <span class="text-zinc-600 hidden sm:inline">/</span>
+        <span class="text-zinc-400 font-medium text-[11px] truncate max-w-[150px] sm:max-w-none" id="top-title">Карточка объекта</span>
+      </div>
+
+      <!-- Interactive Step Indicator Pills -->
+      <nav class="flex items-center space-x-1 sm:space-x-1.5 bg-slateCustom-950/80 px-2 sm:px-3 py-1 rounded-full border border-white/10">
+        <button onclick="switchScreen(1)" id="dot-1" class="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-clay-500 transition-all"></button>
+        <button onclick="switchScreen(2)" id="dot-2" class="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-zinc-700 transition-all"></button>
+        <button onclick="switchScreen(3)" id="dot-3" class="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-zinc-700 transition-all"></button>
+        <button onclick="switchScreen(4)" id="dot-4" class="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-zinc-700 transition-all"></button>
+        <button onclick="switchScreen(5)" id="dot-5" class="w-2 sm:w-2.5 h-2 sm:h-2.5 rounded-full bg-zinc-700 transition-all"></button>
+      </nav>
+
+      <!-- Security Mode Indicator (Black-Box Protection) -->
+      <div class="flex items-center space-x-2 text-[10px] sm:text-[11px] font-mono text-zinc-400">
+        <span class="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[9px] sm:text-[10px] font-medium hidden sm:inline">
+          BLACK-BOX АКТИВЕН
+        </span>
+        <span class="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px]">КЭШ: 100%</span>
+      </div>
+    </header>
+
+    <!-- MAIN LIGHT WORKSPACE VIEWPORT -->
+    <main class="flex-1 bg-white rounded-xl sm:rounded-2xl flex flex-col overflow-hidden relative shadow-inner">
+
+      <!-- =================================================================== -->
+      <!-- SCREEN 1: КАРТОЧКА ЗАЯВКИ И ПЕРВИЧНЫЙ КОНТАКТ                        -->
+      <!-- =================================================================== -->
+      <section id="screen-1" class="screen-view active flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col justify-between">
+        <div class="max-w-2xl mx-auto w-full my-auto space-y-6">
+          
+          <div class="space-y-2 text-center sm:text-left">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-clay-50 text-clay-700 text-[11px] font-mono font-medium border border-clay-100">
+              <span class="w-1.5 h-1.5 rounded-full bg-clay-500"></span>
+              <span>Федеральный договор • Гипермаркет «Лемана ПРО»</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+              Выездной замер и расчет санузла
+            </h1>
+            <p class="text-xs sm:text-sm text-slate-500">
+              Екатеринбург, ул. Радищева 33, кв. 142 • Заказчик: Михаил В. (+7 912 ***-**-89)
+            </p>
+          </div>
+
+          <!-- Pre-selected materials card from hypermarket floor -->
+          <div class="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-slate-50/70 space-y-4">
+            <div class="flex items-center justify-between text-xs font-mono text-slate-500 border-b border-slate-200 pb-2">
+              <span class="uppercase font-semibold text-slate-700">Выбор клиента в торговом зале</span>
+              <span class="text-emerald-600 font-medium">Замер оплачен: 2 500 ₽</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <!-- Wall tile preview -->
+              <div class="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm">
+                <div class="w-12 h-12 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-[10px] font-mono font-bold text-amber-800 text-center leading-tight">
+                  СТЕНЫ
+                </div>
+                <div class="min-w-0">
+                  <div class="text-[10px] font-mono text-clay-600 uppercase">Основная плитка</div>
+                  <div class="text-xs font-semibold text-slate-900 truncate" id="card-wall-tile-title">Calacatta Gold 60×120</div>
+                  <div class="text-[11px] text-slate-500 font-mono">2 190 ₽/м² • 1.44 м²/пачка</div>
+                </div>
+              </div>
+
+              <!-- Floor tile preview -->
+              <div class="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200/80 shadow-sm">
+                <div class="w-12 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[10px] font-mono font-bold text-zinc-100 text-center leading-tight">
+                  ПОЛ
+                </div>
+                <div class="min-w-0">
+                  <div class="text-[10px] font-mono text-clay-600 uppercase">Керамогранит пола</div>
+                  <div class="text-xs font-semibold text-slate-900 truncate" id="card-floor-tile-title">Графитовый Сланец 60×60</div>
+                  <div class="text-[11px] text-slate-500 font-mono">1 850 ₽/м² • 1.44 м²/пачка</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-[11px] text-slate-500 leading-relaxed border-l-2 border-clay-500 pl-3">
+              Задача замерщика: выполнить аппаратный обмер, зафиксировать наличие коробов стояка и сформировать на объекте точную смету с визуализацией.
+            </div>
+          </div>
+
+          <!-- Bottom Action Button -->
+          <button onclick="switchScreen(2)" class="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-medium text-sm transition shadow-md flex items-center justify-center gap-2 tap-bounce">
+            <span>Активировать LiDAR и начать сканирование</span>
+            <span class="font-mono text-xs opacity-60">→</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- SCREEN 2: СКАНЕР ГЕОМЕТРИИ (LIDAR POINT CLOUD / MESH)              -->
+      <!-- =================================================================== -->
+      <section id="screen-2" class="screen-view hidden flex-1 overflow-y-auto p-3 sm:p-6 flex flex-col justify-between space-y-3">
+        
+        <div class="flex items-center justify-between shrink-0">
+          <div>
+            <h2 class="text-sm sm:text-base font-semibold text-slate-900">Оцифровка геометрии санузла</h2>
+            <p class="text-[11px] sm:text-xs text-slate-500">Захват контура стен, высот и дверного проема</p>
+          </div>
+          <!-- LiDAR view mode switcher -->
+          <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-[10px] font-mono">
+            <button type="button" onclick="setLidarRenderMode('points')" id="btn-lidar-points" class="px-2.5 py-1 rounded bg-white font-semibold text-slate-900 shadow-sm transition">
+              Точки LiDAR
+            </button>
+            <button type="button" onclick="setLidarRenderMode('mesh')" id="btn-lidar-mesh" class="px-2.5 py-1 rounded text-slate-600 hover:text-slate-900 transition">
+              Сетка Mesh
+            </button>
+          </div>
+        </div>
+
+        <!-- 3D Viewport Box -->
+        <div class="flex-1 bg-slateCustom-950 rounded-xl overflow-hidden relative border border-slateCustom-850 flex flex-col justify-between min-h-[260px] sm:min-h-[340px]">
+          <!-- Sweeping scanner laser beam -->
+          <div class="scanner-sweep-beam absolute left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-clay-500 to-transparent pointer-events-none z-10"></div>
+          
+          <div class="absolute top-2.5 left-2.5 z-10 flex flex-wrap gap-1.5">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900/90 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+              LiDAR TOF • 60 FPS
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-900/90 text-slate-300 border border-white/10 hidden sm:inline">
+              Погрешность: ±2 мм
+            </span>
+          </div>
+
+          <!-- Three.js LiDAR canvas mount point -->
+          <div id="lidar-canvas-container" class="w-full h-full min-h-[240px] cursor-grab active:cursor-grabbing"></div>
+
+          <!-- Real-time detected primitives bar -->
+          <div class="absolute bottom-2 left-2 right-2 z-10 flex flex-wrap items-center justify-between text-[11px] text-slate-300 bg-slateCustom-900/95 backdrop-blur px-3 py-2 rounded-lg border border-white/10 gap-2">
+            <div class="flex items-center gap-2 font-mono text-[10px] sm:text-xs">
+              <span class="text-clay-500 font-bold">Распознано:</span>
+              <span>4 плоскости</span>
+              <span class="text-zinc-600">•</span>
+              <span>Дверь 0.70 м</span>
+              <span class="text-zinc-600">•</span>
+              <span id="detected-fixture-badge">Ванна 1.70×0.70 м</span>
+            </div>
+            <div class="font-mono text-[10px] text-zinc-400">
+              Габариты: <strong class="text-white">2.10 × 1.80 м (H: 2.60 м)</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metrics bar and Action row -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-1 shrink-0">
+          <div class="flex items-center justify-between sm:justify-start gap-4 font-mono text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+            <div>Стена A: <strong class="text-slate-900">2.10 м</strong></div>
+            <div>Стена B: <strong class="text-slate-900">1.80 м</strong></div>
+            <div>Высота: <strong class="text-slate-900">2.60 м</strong></div>
+            <div>Пол: <strong class="text-clay-600" id="scan-floor-sum">3.78 м²</strong></div>
+          </div>
+
+          <button onclick="switchScreen(3)" class="py-3 px-6 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-medium text-xs transition shadow-sm flex items-center justify-center gap-2 tap-bounce">
+            <span>Геометрия верна • К узлам</span>
+            <span class="font-mono opacity-60">→</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- SCREEN 3: КОНФИГУРАТОР СТРОИТЕЛЬНЫХ УЗЛОВ                           -->
+      <!-- =================================================================== -->
+      <section id="screen-3" class="screen-view hidden flex-1 overflow-y-auto p-3 sm:p-6 flex flex-col justify-between space-y-3">
+        
+        <div class="flex items-center justify-between shrink-0">
+          <div>
+            <h2 class="text-sm sm:text-base font-semibold text-slate-900">Инженерные узлы и сантехника</h2>
+            <p class="text-[11px] sm:text-xs text-slate-500">Нажмите на стояк или смените тип сантехники</p>
+          </div>
+          <div class="text-right font-mono text-xs">
+            <span class="text-slate-400">Чистая площадь стен:</span>
+            <strong class="text-slate-900 text-sm ml-1" id="cfg-wall-area">18.88 м²</strong>
+          </div>
+        </div>
+
+        <!-- 2D Architect Blueprint & Controls Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 flex-1 min-h-[300px]">
+          
+          <!-- Left blueprint interactive canvas (7 cols) -->
+          <div class="md:col-span-7 bg-slate-50/80 border border-slate-200 rounded-xl p-3 flex flex-col justify-between relative">
+            <div class="flex items-center justify-between text-[10px] font-mono text-slate-500">
+              <span>ПЛАН ОБМЕРА 1:20</span>
+              <span class="text-clay-600 font-medium">Интерактивный чертеж</span>
+            </div>
+
+            <!-- SVG Blueprint of the bathroom -->
+            <div class="flex-1 flex items-center justify-center py-1">
+              <svg viewBox="0 0 360 300" class="w-full max-h-[240px] select-none">
+                <!-- Main Room boundaries -->
+                <rect x="40" y="25" width="280" height="235" fill="#ffffff" stroke="#1e293b" stroke-width="2.5" rx="3" />
+                
+                <!-- Doorway Bottom -->
+                <rect x="145" y="257" width="70" height="7" fill="#ffffff" stroke="#94a3b8" stroke-width="1.5" />
+                <text x="157" y="278" font-size="10" fill="#64748b" font-family="monospace">Дверь 0.7 м</text>
+
+                <!-- Pipe Duct Hotspot in Top Left Corner -->
+                <g id="svg-duct-group" onclick="toggleDuctBox()" class="cursor-pointer group">
+                  <rect id="svg-duct-box" x="42" y="27" width="55" height="45" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3" class="transition group-hover:fill-clay-100" />
+                  <circle cx="69" cy="49" r="8" fill="#c25e38" />
+                  <text id="svg-duct-icon" x="66" y="53" font-size="11" fill="#ffffff" font-weight="bold">+</text>
+                  <text id="svg-duct-caption" x="104" y="52" font-size="10" fill="#475569" font-family="monospace">Стояк (нажмите)</text>
+                </g>
+
+                <!-- Fixture 1: Bathtub or Walk-in Shower -->
+                <g id="svg-fixture-bath" class="transition">
+                  <rect id="svg-fixture-shape" x="43" y="85" width="65" height="172" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" rx="6" />
+                  <text id="svg-fixture-label" x="55" y="176" font-size="10" fill="#64748b" transform="rotate(-90 55,176)" font-family="sans-serif">Ванна 170×70</text>
+                </g>
+
+                <!-- Fixture 2: Washbasin Vanity -->
+                <rect x="245" y="45" width="70" height="45" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" rx="4" />
+                <text x="256" y="72" font-size="9" fill="#64748b">Раковина 70</text>
+
+                <!-- Fixture 3: Toilet / Wall-hung WC -->
+                <rect x="255" y="190" width="60" height="65" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5" rx="4" />
+                <text x="268" y="227" font-size="9" fill="#64748b">Инсталляция</text>
+              </svg>
+            </div>
+
+            <div class="text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-200/60 pt-1.5">
+              <span id="duct-status-label">Стояк открыт</span>
+              <span class="font-mono text-[10px] text-slate-400">Короб рассчитывает запил 45°</span>
+            </div>
+          </div>
+
+          <!-- Right control panel (5 cols) -->
+          <div class="md:col-span-5 border border-slate-200 rounded-xl p-4 flex flex-col justify-between space-y-3 bg-white">
+            <div class="space-y-3">
+              
+              <!-- Property status switcher -->
+              <div class="space-y-1.5">
+                <span class="text-xs font-medium text-slate-700 block">Тип состояния объекта:</span>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" id="type-btn-new" onclick="selectRenoType('new')" class="py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-200 text-slate-600 bg-white hover:bg-slate-50">
+                    Новостройка
+                  </button>
+                  <button type="button" id="type-btn-old" onclick="selectRenoType('old')" class="py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-900 bg-slate-900 text-white shadow-sm">
+                    Вторичка (+Демонтаж)
+                  </button>
+                </div>
+              </div>
+
+              <!-- Fixture Type Switcher: Bathtub vs Shower -->
+              <div class="space-y-1.5 pt-1 border-t border-slate-100">
+                <span class="text-xs font-medium text-slate-700 block">Основная сантехника:</span>
+                <div class="grid grid-cols-2 gap-2">
+                  <button type="button" id="fixture-btn-bath" onclick="selectFixtureType('bath')" class="py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-900 bg-slate-900 text-white shadow-sm">
+                    Ванна 170×70
+                  </button>
+                  <button type="button" id="fixture-btn-shower" onclick="selectFixtureType('shower')" class="py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-200 text-slate-600 bg-white hover:bg-slate-50">
+                    Душевой трап
+                  </button>
+                </div>
+              </div>
+
+              <!-- GKL Duct Toggle Card -->
+              <div class="p-3 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-medium text-slate-900">Короб стояка ГКЛВ</div>
+                  <div class="text-[10px] text-slate-500">Запил внешнего ребра под 45°</div>
+                </div>
+                <input type="checkbox" id="minimal-duct-chk" onchange="syncDuctToggle(this.checked)" class="w-4 h-4 accent-clay-500 rounded cursor-pointer">
+              </div>
+
+              <!-- Summary Indicators -->
+              <div class="p-2.5 rounded-lg bg-slate-100/70 font-mono text-xs space-y-1 text-slate-600">
+                <div class="flex justify-between">
+                  <span>Запил углов 45°:</span>
+                  <strong class="text-slate-900" id="stat-miter-len">0.0 м.п.</strong>
+                </div>
+                <div class="flex justify-between">
+                  <span>Площадь пола (чистая):</span>
+                  <strong class="text-slate-900" id="stat-floor-area">3.78 м²</strong>
+                </div>
+              </div>
+            </div>
+
+            <button onclick="switchScreen(4)" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-medium text-xs transition shadow-sm tap-bounce">
+              Сформировать смету и 3D →
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- SCREEN 4: СМЕТА, ПРЕЗЕНТАЦИЯ И 3D ВИЗУАЛИЗАЦИЯ                       -->
+      <!-- =================================================================== -->
+      <section id="screen-4" class="screen-view hidden flex-1 overflow-y-auto p-3 sm:p-6 flex flex-col justify-between space-y-3">
+        
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 min-h-[380px]">
+          
+          <!-- Left Column: Realistic 3D Room Visualizer (7 cols) -->
+          <div class="lg:col-span-7 bg-slateCustom-950 rounded-xl border border-slateCustom-850 p-3 flex flex-col justify-between relative overflow-hidden">
+            
+            <!-- Materials and Collections Selectors Toolbar -->
+            <div class="z-10 space-y-2 border-b border-white/10 pb-2">
+              
+              <!-- Wall Material Row -->
+              <div class="flex items-center justify-between text-[11px] font-mono">
+                <div class="flex items-center gap-1.5 text-zinc-300">
+                  <span class="w-2 h-2 rounded-full bg-clay-500"></span>
+                  <span class="font-medium text-white" id="label-wall-tile">Calacatta Gold</span>
+                  <span class="text-zinc-500 hidden sm:inline">(Стены)</span>
+                </div>
+                <div class="flex gap-1">
+                  <button type="button" onclick="setWallPreset('calacatta')" id="btn-wall-calacatta" class="px-2 py-0.5 rounded text-[10px] font-mono bg-clay-500 text-white font-medium transition">Мрамор</button>
+                  <button type="button" onclick="setWallPreset('nero')" id="btn-wall-nero" class="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 hover:bg-white/20 text-zinc-300 transition">Неро</button>
+                  <button type="button" onclick="setWallPreset('travertine')" id="btn-wall-travertine" class="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 hover:bg-white/20 text-zinc-300 transition">Травертин</button>
+                  <button type="button" onclick="setWallPreset('emerald')" id="btn-wall-emerald" class="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 hover:bg-white/20 text-zinc-300 transition">Изумруд</button>
+                </div>
+              </div>
+
+              <!-- Floor Material Row -->
+              <div class="flex items-center justify-between text-[11px] font-mono">
+                <div class="flex items-center gap-1.5 text-zinc-300">
+                  <span class="w-2 h-2 rounded-full bg-zinc-400"></span>
+                  <span class="font-medium text-white" id="label-floor-tile">Сланец Графит</span>
+                  <span class="text-zinc-500 hidden sm:inline">(Пол)</span>
+                </div>
+                <div class="flex gap-1">
+                  <button type="button" onclick="setFloorPreset('slate')" id="btn-floor-slate" class="px-2 py-0.5 rounded text-[10px] font-mono bg-clay-500 text-white font-medium transition">Сланец</button>
+                  <button type="button" onclick="setFloorPreset('wood')" id="btn-floor-wood" class="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 hover:bg-white/20 text-zinc-300 transition">Дуб</button>
+                  <button type="button" onclick="setFloorPreset('terrazzo')" id="btn-floor-terrazzo" class="px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 hover:bg-white/20 text-zinc-300 transition">Терраццо</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3D Room Three.js Viewport with Interactive Touch Orbit -->
+            <div id="room-canvas-container" class="w-full flex-1 min-h-[200px] my-1 cursor-grab active:cursor-grabbing relative select-none">
+              <span class="absolute bottom-2 right-2 text-[9px] font-mono text-zinc-400 bg-slateCustom-900/90 px-2 py-0.5 rounded border border-white/10 pointer-events-none z-10 backdrop-blur">
+                Вращение: зажмите и вращайте 360°
+              </span>
+            </div>
+
+            <div class="text-[10px] text-zinc-400 border-t border-white/5 pt-1.5 z-10 leading-tight font-mono">
+              Эскиз отображает фактуру, цвет и раскладку плитки. Инженерные короба возводятся строго по обмерному плану.
+            </div>
+          </div>
+
+          <!-- Right Column: Rigorous Deterministic Estimate (5 cols) -->
+          <div class="lg:col-span-5 border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col justify-between space-y-3 bg-white">
+            <div class="space-y-3">
+              <div>
+                <h3 class="text-sm font-semibold text-slate-900">Итоговый расчет на объекте</h3>
+                <p class="text-[11px] text-slate-500 font-mono">Автоматический расчет по тарифам ССК</p>
+              </div>
+
+              <!-- Item 1: Wall Tiles -->
+              <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
+                <div class="flex justify-between items-center text-xs">
+                  <span class="font-medium text-slate-700">Плитка на стены («Лемана ПРО»):</span>
+                  <strong class="font-mono text-slate-900" id="final-wall-cost">43 800 ₽</strong>
+                </div>
+                <div class="text-[10px] text-slate-500 font-mono flex justify-between">
+                  <span id="wall-calc-details">18.88 м² (+7% запас)</span>
+                  <span id="final-wall-boxes" class="text-slate-800 font-medium">14 коробок (20.16 м²)</span>
+                </div>
+              </div>
+
+              <!-- Item 2: Floor Tiles -->
+              <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
+                <div class="flex justify-between items-center text-xs">
+                  <span class="font-medium text-slate-700">Керамогранит пола («Лемана ПРО»):</span>
+                  <strong class="font-mono text-slate-900" id="final-floor-cost">7 992 ₽</strong>
+                </div>
+                <div class="text-[10px] text-slate-500 font-mono flex justify-between">
+                  <span id="floor-calc-details">3.78 м² (+7% запас)</span>
+                  <span id="final-floor-boxes" class="text-slate-800 font-medium">3 коробки (4.32 м²)</span>
+                </div>
+              </div>
+
+              <!-- Item 3: Labor & Rough Materials (SSK) -->
+              <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 space-y-1">
+                <div class="flex justify-between items-center text-xs">
+                  <span class="font-medium text-slate-700">Работы и черновые смеси («ССК»):</span>
+                  <strong class="font-mono text-slate-900" id="final-ssk-cost">198 400 ₽</strong>
+                </div>
+                <div class="text-[10px] text-slate-500 font-mono flex justify-between">
+                  <span>Монтаж под ключ + гидроизоляция:</span>
+                  <span class="text-emerald-700 font-medium font-mono">Гарантия 24 мес</span>
+                </div>
+              </div>
+
+              <!-- Total Banner -->
+              <div class="p-3 rounded-lg bg-slate-900 text-white flex items-center justify-between shadow-sm">
+                <div>
+                  <span class="text-[10px] text-slate-400 uppercase font-mono block">ИТОГО К ОПЛАТЕ:</span>
+                  <strong class="text-lg font-mono text-white" id="final-grand-total">250 192 ₽</strong>
+                </div>
+                <div class="text-right text-[10px] text-slate-400 font-mono">
+                  Срок работ: <strong>14 дней</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Branch Action Buttons -->
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button onclick="switchScreen(5, 'pay')" class="py-2.5 px-2 bg-clay-500 hover:bg-clay-600 text-white rounded-lg font-medium text-xs transition shadow-sm tap-bounce">
+                Оформить аванс (СБП) →
+              </button>
+              <button onclick="switchScreen(5, 'passport')" class="py-2.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg font-medium text-xs transition tap-bounce">
+                Паспорт замера (2 500 ₽)
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================================== -->
+      <!-- SCREEN 5: ФИКСАЦИЯ СДЕЛКИ (СБП АВАНС / ТЕХНИЧЕСКИЙ ПАСПОРТ)        -->
+      <!-- =================================================================== -->
+      <section id="screen-5" class="screen-view hidden flex-1 overflow-y-auto p-4 sm:p-8 flex flex-col justify-center max-w-md mx-auto w-full">
+        
+        <!-- BRANCH A: SBP ADVANCE PAYMENT -->
+        <div id="view-branch-pay" class="space-y-4 text-center">
+          <div class="space-y-1">
+            <span class="text-[10px] font-mono font-medium text-clay-600 uppercase tracking-wider">Система быстрых платежей</span>
+            <h2 class="text-lg sm:text-xl font-bold text-slate-900">Бронирование бригады ССК</h2>
+            <p class="text-xs text-slate-500">Отсканируйте QR-код в приложении любого банка</p>
+          </div>
+
+          <!-- Dynamic QR Card -->
+          <div class="p-4 bg-slate-50 rounded-2xl border border-slate-200 max-w-xs mx-auto flex flex-col items-center shadow-sm">
+            <div class="w-40 h-40 bg-white p-3 rounded-xl shadow-sm border border-slate-200 flex items-center justify-center relative">
+              <svg class="w-32 h-32" viewBox="0 0 100 100" fill="#0f172a">
+                <path d="M0,0 h30 v30 h-30 z M10,10 h10 v10 h-10 z M70,0 h30 v30 h-30 z M80,10 h10 v10 h-10 z M0,70 h30 v30 h-30 z M10,80 h10 v10 h-10 z M40,10 h20 v10 h-20 z M40,40 h20 v20 h-20 z M70,50 h10 v10 h-10 z M80,70 h20 v20 h-20 z M50,80 h10 v20 h-10 z M20,40 h10 v10 h-10 z M60,70 h10 v10 h-10 z"/>
+              </svg>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <span class="bg-white px-2 py-0.5 rounded text-[10px] font-mono font-bold text-clay-600 border border-slate-200 shadow-sm">СБП</span>
+              </div>
+            </div>
+            
+            <div class="mt-2.5 font-mono text-center">
+              <span class="text-[11px] text-slate-500 block">Гарантийный аванс (бронь даты):</span>
+              <strong class="text-2xl text-slate-900 font-bold">5 000 ₽</strong>
+            </div>
+          </div>
+
+          <p class="text-[10px] text-slate-500 leading-relaxed">
+            Оплата является акцептом Договора-оферты ООО «ССК». Фискальный чек поступит по SMS по 54-ФЗ.
+          </p>
+
+          <div class="flex gap-2 pt-1">
+            <button onclick="triggerPaymentDone()" class="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-medium text-xs transition shadow-sm tap-bounce">
+              Имитировать оплату клиентом
+            </button>
+            <button onclick="switchScreen(4)" class="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium text-xs transition">
+              Назад
+            </button>
+          </div>
+        </div>
+
+        <!-- BRANCH B: TECH PASSPORT (CUSTOMER HESITATING) -->
+        <div id="view-branch-passport" class="space-y-4 text-center hidden">
+          <div class="space-y-1">
+            <span class="text-[10px] font-mono font-medium text-slate-500 uppercase tracking-wider">Официальный результат</span>
+            <h2 class="text-lg sm:text-xl font-bold text-slate-900">Технический паспорт замера</h2>
+            <p class="text-xs text-slate-500">Замер отработан за 2 500 ₽</p>
+          </div>
+
+          <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50 text-left text-xs font-mono space-y-1.5">
+            <div class="flex justify-between border-b border-slate-200 pb-1">
+              <span class="text-slate-500">Габариты комнаты:</span>
+              <span class="text-slate-900 font-medium">2.10 × 1.80 м (H: 2.60 м)</span>
+            </div>
+            <div class="flex justify-between border-b border-slate-200 pb-1">
+              <span class="text-slate-500">Плитка на стены:</span>
+              <span class="text-slate-900 font-medium" id="pass-wall-boxes">14 кор. (Calacatta)</span>
+            </div>
+            <div class="flex justify-between border-b border-slate-200 pb-1">
+              <span class="text-slate-500">Плитка на пол:</span>
+              <span class="text-slate-900 font-medium" id="pass-floor-boxes">3 кор. (Сланец)</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500">Условия ССК:</span>
+              <span class="text-clay-600 font-medium">Зафиксированы на 48 часов</span>
+            </div>
+          </div>
+
+          <p class="text-[11px] text-slate-500 leading-relaxed">
+            Ссылка на обмерный чертеж отправлена клиенту по SMS. Детализация сметы защищена от передачи сторонним бригадам.
+          </p>
+
+          <button onclick="triggerPassportSent()" class="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-medium text-xs transition shadow-sm tap-bounce">
+            Отправить SMS заказчику и завершить выезд
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- BOTTOM MINIMAL STATUS BAR -->
+    <footer class="flex items-center justify-between px-3 pt-2 text-[10px] sm:text-[11px] font-mono text-zinc-400 shrink-0 select-none">
+      <div>
+        Оператор: <strong class="text-zinc-200">Замерщик ССК №14</strong>
+      </div>
+      <div>
+        Экран <span id="footer-step">1</span> из 5
+      </div>
+    </footer>
+  </div>
+
+  <!-- NOTIFICATION POPUP TOAST -->
+  <div id="minimal-toast" class="fixed bottom-5 right-5 max-w-xs bg-slate-900 text-white p-3.5 rounded-xl shadow-2xl border border-slate-800 translate-y-24 opacity-0 transition-all duration-300 pointer-events-none z-50">
+    <div class="flex items-center gap-2.5">
+      <span class="text-clay-500 font-bold text-sm">✓</span>
+      <div>
+        <div id="toast-head" class="text-xs font-semibold">Готово</div>
+        <div id="toast-body" class="text-[11px] text-zinc-400">Операция зафиксирована</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* APPLICATION STATE */
+    const appState = {
+      step: 1,
+      renoType: 'old',
+      hasDuct: false,
+      fixtureType: 'bath', // 'bath' or 'shower'
+      wallPreset: 'calacatta',
+      floorPreset: 'slate',
+      lidarMode: 'points',
+      dims: {
+        wallA: 2.10,
+        wallB: 1.80,
+        height: 2.60,
+        doorArea: 1.40
+      },
+      prices: {
+        wallTiles: {
+          calacatta: { name: 'Calacatta Gold 60×120', priceM2: 2190, boxM2: 1.44 },
+          nero: { name: 'Nero Marquina 60×120', priceM2: 2450, boxM2: 1.44 },
+          travertine: { name: 'Travertine Warm 60×120', priceM2: 2280, boxM2: 1.44 },
+          emerald: { name: 'Изумрудный Сад 30×60', priceM2: 1980, boxM2: 1.08 }
+        },
+        floorTiles: {
+          slate: { name: 'Сланец Графит 60×60', priceM2: 1850, boxM2: 1.44 },
+          wood: { name: 'Теплый Дуб 20×120', priceM2: 2150, boxM2: 1.20 },
+          terrazzo: { name: 'Терраццо Венеция 60×60', priceM2: 2350, boxM2: 1.44 }
+        },
+        laborPerM2: 1850,
+        roughPerM2: 750,
+        miterPerM: 950,
+        ductLabor: 3500,
+        ductMaterial: 1800,
+        demoPackage: 14500,
+        showerWaterproofingAddon: 4200
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initLidar3D();
+      initRoomVisualizer3D();
+      computeAll();
+    });
+
+    /* SCREEN SWITCHER LOGIC */
+    function switchScreen(nextStep, subBranch = 'pay') {
+      appState.step = nextStep;
+
+      // Hide all screen views
+      document.querySelectorAll('.screen-view').forEach(s => s.classList.add('hidden'));
+      const active = document.getElementById(`screen-${nextStep}`);
+      if (active) active.classList.remove('hidden');
+
+      // Update interactive stepper dots
+      for (let i = 1; i <= 5; i++) {
+        const dot = document.getElementById(`dot-${i}`);
+        if (!dot) continue;
+        if (i === nextStep) {
+          dot.className = "w-2.5 h-2.5 rounded-full bg-clay-500 transition-all";
+        } else if (i < nextStep) {
+          dot.className = "w-2 h-2 rounded-full bg-zinc-400 transition-all";
+        } else {
+          dot.className = "w-2 h-2 rounded-full bg-zinc-700 transition-all";
+        }
+      }
+
+      const titles = [
+        "Карточка объекта",
+        "Сканирование геометрии",
+        "Строительные узлы",
+        "Презентация и смета",
+        "Фиксация сделки"
+      ];
+      document.getElementById('top-title').innerText = titles[nextStep - 1];
+      document.getElementById('footer-step').innerText = nextStep;
+
+      if (nextStep === 5) {
+        document.getElementById('view-branch-pay').classList.toggle('hidden', subBranch !== 'pay');
+        document.getElementById('view-branch-passport').classList.toggle('hidden', subBranch !== 'passport');
+      }
+
+      // Responsive redraw of WebGL viewports
+      if (nextStep === 2 && window.handleLidarResize) window.handleLidarResize();
+      if (nextStep === 4 && window.handleRoomResize) window.handleRoomResize();
+    }
+
+    function computeAll() {
+      const a = appState.dims.wallA;
+      const b = appState.dims.wallB;
+      const h = appState.dims.height;
+      const door = appState.dims.doorArea;
+
+      let wallNet = ((a + b) * 2 * h) - door;
+      let floorNet = a * b;
+      let miterLinear = 0;
+
+      // Pipe duct addition
+      if (appState.hasDuct) {
+        const ductW = 0.30;
+        const ductD = 0.40;
+        floorNet -= (ductW * ductD);
+        wallNet += (ductW + ductD) * h;
+        miterLinear = h;
+      }
+
+      // Fixture modifier (Walk-in shower requires wall tiling floor-to-ceiling where bath was)
+      if (appState.fixtureType === 'shower') {
+        wallNet += 0.8; // extra apron zone tiles
+      }
+
+      const reserve = 1.07; // 7% reserve
+
+      // WALL TILES QUANTIZATION
+      const currentWallConfig = appState.prices.wallTiles[appState.wallPreset];
+      const wallAreaWithReserve = wallNet * reserve;
+      const wallBoxes = Math.ceil(wallAreaWithReserve / currentWallConfig.boxM2);
+      const wallPurchasedM2 = wallBoxes * currentWallConfig.boxM2;
+      const wallCost = wallPurchasedM2 * currentWallConfig.priceM2;
+
+      // FLOOR TILES QUANTIZATION
+      const currentFloorConfig = appState.prices.floorTiles[appState.floorPreset];
+      const floorAreaWithReserve = floorNet * reserve;
+      const floorBoxes = Math.ceil(floorAreaWithReserve / currentFloorConfig.boxM2);
+      const floorPurchasedM2 = floorBoxes * currentFloorConfig.boxM2;
+      const floorCost = floorPurchasedM2 * currentFloorConfig.priceM2;
+
+      // LABOR & ROUGH MIXTURES
+      const totalTilingArea = wallNet + floorNet;
+      let labor = totalTilingArea * appState.prices.laborPerM2;
+      let rough = totalTilingArea * appState.prices.roughPerM2;
+
+      if (appState.hasDuct) {
+        labor += appState.prices.ductLabor + (miterLinear * appState.prices.miterPerM);
+        rough += appState.prices.ductMaterial;
+      }
+
+      if (appState.renoType === 'old') {
+        labor += appState.prices.demoPackage;
+      }
+
+      if (appState.fixtureType === 'shower') {
+        rough += appState.prices.showerWaterproofingAddon;
+      }
+
+      const sskTotal = labor + rough;
+      const grandTotal = wallCost + floorCost + sskTotal;
+
+      // SYNC DOM LABELS
+      document.getElementById('scan-floor-sum').innerText = `${floorNet.toFixed(2)} м²`;
+      document.getElementById('cfg-wall-area').innerText = `${wallNet.toFixed(2)} м²`;
+      document.getElementById('stat-floor-area').innerText = `${floorNet.toFixed(2)} м²`;
+      document.getElementById('stat-miter-len').innerText = `${miterLinear.toFixed(1)} м.п.`;
+
+      document.getElementById('card-wall-tile-title').innerText = currentWallConfig.name;
+      document.getElementById('card-floor-tile-title').innerText = currentFloorConfig.name;
+
+      document.getElementById('final-wall-cost').innerText = formatCurrency(wallCost);
+      document.getElementById('wall-calc-details').innerText = `${wallNet.toFixed(2)} м² (+7% запас)`;
+      document.getElementById('final-wall-boxes').innerText = `${wallBoxes} кор. (${wallPurchasedM2.toFixed(2)} м²)`;
+
+      document.getElementById('final-floor-cost').innerText = formatCurrency(floorCost);
+      document.getElementById('floor-calc-details').innerText = `${floorNet.toFixed(2)} м² (+7% запас)`;
+      document.getElementById('final-floor-boxes').innerText = `${floorBoxes} кор. (${floorPurchasedM2.toFixed(2)} м²)`;
+
+      document.getElementById('final-ssk-cost').innerText = formatCurrency(sskTotal);
+      document.getElementById('final-grand-total').innerText = formatCurrency(grandTotal);
+
+      document.getElementById('pass-wall-boxes').innerText = `${wallBoxes} кор. (${currentWallConfig.name.split(' ')[0]})`;
+      document.getElementById('pass-floor-boxes').innerText = `${floorBoxes} кор. (${currentFloorConfig.name.split(' ')[0]})`;
+
+      // SVG DUCT STATE
+      const ductSvg = document.getElementById('svg-duct-box');
+      const ductIcon = document.getElementById('svg-duct-icon');
+      const ductText = document.getElementById('svg-duct-caption');
+      const ductLabel = document.getElementById('duct-status-label');
+      const ductChk = document.getElementById('minimal-duct-chk');
+
+      if (appState.hasDuct) {
+        ductSvg.setAttribute('fill', '#c25e38');
+        ductSvg.setAttribute('stroke', '#a84d2a');
+        ductSvg.setAttribute('stroke-dasharray', '0');
+        ductIcon.textContent = "✓";
+        ductText.textContent = "Короб ГКЛ (+45°)";
+        ductLabel.innerHTML = '<strong class="text-clay-600">Короб ГКЛ учтен (+запил 45°)</strong>';
+        if (ductChk) ductChk.checked = true;
+      } else {
+        ductSvg.setAttribute('fill', '#f1f5f9');
+        ductSvg.setAttribute('stroke', '#94a3b8');
+        ductSvg.setAttribute('stroke-dasharray', '3');
+        ductIcon.textContent = "+";
+        ductText.textContent = "Стояк (нажмите)";
+        ductLabel.innerHTML = 'Стояк открыт';
+        if (ductChk) ductChk.checked = false;
+      }
+    }
+
+    function formatCurrency(n) {
+      return Math.round(n).toLocaleString('ru-RU') + ' ₽';
+    }
+
+    function toggleDuctBox() {
+      appState.hasDuct = !appState.hasDuct;
+      computeAll();
+      displayToast(appState.hasDuct ? "Короб ГКЛ добавлен" : "Короб ГКЛ убран", "Смета пересчитана автоматически");
+    }
+
+    function syncDuctToggle(checked) {
+      appState.hasDuct = checked;
+      computeAll();
+    }
+
+    function selectRenoType(type) {
+      appState.renoType = type;
+      const btnNew = document.getElementById('type-btn-new');
+      const btnOld = document.getElementById('type-btn-old');
+
+      if (type === 'new') {
+        btnNew.className = "py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-900 bg-slate-900 text-white shadow-sm";
+        btnOld.className = "py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-200 text-slate-600 bg-white hover:bg-slate-50";
+      } else {
+        btnOld.className = "py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-900 bg-slate-900 text-white shadow-sm";
+        btnNew.className = "py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-200 text-slate-600 bg-white hover:bg-slate-50";
+      }
+      computeAll();
+    }
+
+    function selectFixtureType(type) {
+      appState.fixtureType = type;
+      const btnBath = document.getElementById('fixture-btn-bath');
+      const btnShower = document.getElementById('fixture-btn-shower');
+      const svgShape = document.getElementById('svg-fixture-shape');
+      const svgLabel = document.getElementById('svg-fixture-label');
+      const badge = document.getElementById('detected-fixture-badge');
+
+      if (type === 'bath') {
+        btnBath.className = "py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-900 bg-slate-900 text-white shadow-sm";
+        btnShower.className = "py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-200 text-slate-600 bg-white hover:bg-slate-50";
+        svgShape.setAttribute('fill', '#f8fafc');
+        svgLabel.textContent = "Ванна 170×70";
+        if (badge) badge.textContent = "Ванна 1.70×0.70 м";
+      } else {
+        btnShower.className = "py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-900 bg-slate-900 text-white shadow-sm";
+        btnBath.className = "py-2 px-2 rounded-lg border text-xs font-medium transition border-slate-200 text-slate-600 bg-white hover:bg-slate-50";
+        svgShape.setAttribute('fill', '#e0f2fe'); // light cyan shower pan
+        svgLabel.textContent = "Душевой трап";
+        if (badge) badge.textContent = "Душевой поддон 0.90×0.90 м";
+      }
+
+      update3DFixtureModel();
+      computeAll();
+    }
+
+    function generateWallTexture(type) {
+      const w = 512, h = 1024; // 1:2 aspect ratio for 60x120 tiles
+      const cvs = document.createElement('canvas'); cvs.width = w; cvs.height = h;
+      const ctx = cvs.getContext('2d');
+      const bumpCvs = document.createElement('canvas'); bumpCvs.width = w; bumpCvs.height = h;
+      const bCtx = bumpCvs.getContext('2d');
+
+      const rows = 4, cols = 2;
+      const tw = w / cols, th = h / rows;
+      const g = 4; // 2mm grout joint
+
+      // Cement Grout base
+      ctx.fillStyle = (type === 'nero') ? '#0f172a' : (type === 'emerald' ? '#064e3b' : '#64748b');
+      ctx.fillRect(0, 0, w, h);
+      bCtx.fillStyle = '#000000';
+      bCtx.fillRect(0, 0, w, h);
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x = c * tw + (g / 2);
+          const y = r * th + (g / 2);
+          const cw = tw - g;
+          const ch = th - g;
+
+          bCtx.fillStyle = '#ffffff';
+          bCtx.fillRect(x, y, cw, ch);
+          bCtx.strokeStyle = '#64748b';
+          bCtx.lineWidth = 3;
+          bCtx.strokeRect(x + 1, y + 1, cw - 2, ch - 2);
+
+          if (type === 'calacatta') {
+            const grad = ctx.createLinearGradient(x, y, x + cw, y + ch);
+            grad.addColorStop(0, '#faf8f5');
+            grad.addColorStop(0.5, '#f4efe6');
+            grad.addColorStop(1, '#ebe4d5');
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, cw, ch);
+
+            // Marble Golden and Quartz Veins
+            ctx.save();
+            ctx.beginPath(); ctx.rect(x, y, cw, ch); ctx.clip();
+            ctx.strokeStyle = '#c28e46'; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.75;
+            ctx.beginPath();
+            ctx.moveTo(x + (r * 33) % cw, y);
+            ctx.bezierCurveTo(x + cw * 0.4, y + ch * 0.3, x + cw * 0.6, y + ch * 0.7, x + cw - 10, y + ch);
+            ctx.stroke();
+
+            ctx.strokeStyle = '#78716c'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.45;
+            ctx.beginPath();
+            ctx.moveTo(x + cw, y + (c * 41) % ch);
+            ctx.bezierCurveTo(x + cw * 0.6, y + ch * 0.5, x + cw * 0.2, y + ch * 0.4, x, y + ch - 20);
+            ctx.stroke();
+            ctx.restore();
+
+          } else if (type === 'nero') {
+            const grad = ctx.createLinearGradient(x, y, x + cw, y + ch);
+            grad.addColorStop(0, '#1c1f24');
+            grad.addColorStop(1, '#0c0e12');
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, cw, ch);
+
+            ctx.save();
+            ctx.beginPath(); ctx.rect(x, y, cw, ch); ctx.clip();
+            ctx.strokeStyle = '#f8fafc'; ctx.lineWidth = 2.2; ctx.globalAlpha = 0.85;
+            ctx.beginPath();
+            ctx.moveTo(x, y + ch * 0.3);
+            ctx.lineTo(x + cw * 0.5, y + ch * 0.5);
+            ctx.lineTo(x + cw, y + ch * 0.8);
+            ctx.stroke();
+            ctx.restore();
+
+          } else if (type === 'emerald') {
+            const grad = ctx.createLinearGradient(x, y, x + cw, y + ch);
+            grad.addColorStop(0, '#065f46');
+            grad.addColorStop(1, '#022c22');
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, cw, ch);
+
+            ctx.strokeStyle = '#10b981'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.4;
+            ctx.strokeRect(x + 2, y + 2, cw - 4, ch - 4);
+
+          } else {
+            // Travertine
+            const grad = ctx.createLinearGradient(x, y, x, y + ch);
+            grad.addColorStop(0, '#f5efe6');
+            grad.addColorStop(0.5, '#e8dcce');
+            grad.addColorStop(1, '#ded0bf');
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, cw, ch);
+
+            ctx.save();
+            ctx.beginPath(); ctx.rect(x, y, cw, ch); ctx.clip();
+            ctx.strokeStyle = '#bfa993'; ctx.lineWidth = 2.5; ctx.globalAlpha = 0.5;
+            for (let i = 15; i < ch; i += 25) {
+              ctx.beginPath();
+              ctx.moveTo(x, y + i);
+              ctx.lineTo(x + cw, y + i + ((i % 15) - 7));
+              ctx.stroke();
+            }
+            ctx.restore();
+          }
+        }
+      }
+
+      return { diffuse: cvs, bump: bumpCvs };
+    }
+
+    function generateFloorTexture(type) {
+      const s = 512;
+      const cvs = document.createElement('canvas'); cvs.width = s; cvs.height = s;
+      const ctx = cvs.getContext('2d');
+
+      if (type === 'wood') {
+        // Wood Plank effect (Warm Oak)
+        ctx.fillStyle = '#1c1917'; ctx.fillRect(0, 0, s, s);
+        const planks = 4;
+        const ph = s / planks;
+        for (let i = 0; i < planks; i++) {
+          const y = i * ph + 2;
+          const grad = ctx.createLinearGradient(0, y, s, y + ph);
+          grad.addColorStop(0, '#b45309');
+          grad.addColorStop(0.5, '#92400e');
+          grad.addColorStop(1, '#78350f');
+          ctx.fillStyle = grad;
+          ctx.fillRect(2, y, s - 4, ph - 4);
+        }
+      } else if (type === 'terrazzo') {
+        ctx.fillStyle = '#e2e8f0'; ctx.fillRect(0, 0, s, s);
+        ctx.fillStyle = '#1e293b';
+        for (let i = 0; i < 150; i++) {
+          const rx = Math.random() * s, ry = Math.random() * s, rz = Math.random() * 4 + 2;
+          ctx.fillStyle = (i % 3 === 0) ? '#c25e38' : (i % 2 === 0 ? '#0f172a' : '#64748b');
+          ctx.fillRect(rx, ry, rz, rz);
+        }
+      } else {
+        // Dark Slate 60x60
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, s, s);
+        const tiles = 4; const tw = s / tiles; const g = 4;
+        for (let r = 0; r < tiles; r++) {
+          for (let c = 0; c < tiles; c++) {
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(c * tw + g / 2, r * tw + g / 2, tw - g, tw - g);
+          }
+        }
+      }
+      return cvs;
+    }
+
+    /* PRESET SELECTORS */
+    window.setWallPreset = function(type) {
+      appState.wallPreset = type;
+      const labels = {
+        'calacatta': 'Calacatta Gold 60×120',
+        'nero': 'Nero Marquina 60×120',
+        'travertine': 'Travertine Warm 60×120',
+        'emerald': 'Изумрудный Сад 30×60'
+      };
+      document.getElementById('label-wall-tile').innerText = labels[type];
+      ['calacatta', 'nero', 'travertine', 'emerald'].forEach(t => {
+        const btn = document.getElementById(`btn-wall-${t}`);
+        if (btn) btn.className = (t === type) ? "px-2 py-0.5 rounded text-[10px] font-mono bg-clay-500 text-white font-medium transition" : "px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 hover:bg-white/20 text-zinc-300 transition";
+      });
+      update3DWallTextures();
+      computeAll();
+    };
+
+    window.setFloorPreset = function(type) {
+      appState.floorPreset = type;
+      const labels = {
+        'slate': 'Сланец Графит 60×60',
+        'wood': 'Теплый Дуб 20×120',
+        'terrazzo': 'Терраццо Венеция 60×60'
+      };
+      document.getElementById('label-floor-tile').innerText = labels[type];
+      ['slate', 'wood', 'terrazzo'].forEach(t => {
+        const btn = document.getElementById(`btn-floor-${t}`);
+        if (btn) btn.className = (t === type) ? "px-2 py-0.5 rounded text-[10px] font-mono bg-clay-500 text-white font-medium transition" : "px-2 py-0.5 rounded text-[10px] font-mono bg-white/10 hover:bg-white/20 text-zinc-300 transition";
+      });
+      update3DFloorTexture();
+      computeAll();
+    };
+
+    let lidarGlobals = { scene: null, camera: null, renderer: null, pointsObj: null, meshObj: null };
+
+    function initLidar3D() {
+      const el = document.getElementById('lidar-canvas-container');
+      if (!el) return;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c0e);
+      lidarGlobals.scene = scene;
+
+      const camera = new THREE.PerspectiveCamera(50, el.clientWidth / el.clientHeight, 0.1, 100);
+      camera.position.set(2.8, 3.0, 3.6);
+      camera.lookAt(0, 0.5, 0);
+      lidarGlobals.camera = camera;
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(el.clientWidth, el.clientHeight);
+      el.appendChild(renderer.domElement);
+      lidarGlobals.renderer = renderer;
+
+      // 1. Point Cloud Object
+      const count = 4000;
+      const geo = new THREE.BufferGeometry();
+      const pos = new Float32Array(count * 3);
+      const col = new Float32Array(count * 3);
+      const cClay = new THREE.Color(0xc25e38);
+      const cCyan = new THREE.Color(0x38bdf8);
+
+      for (let i = 0; i < count; i++) {
+        const side = Math.floor(Math.random() * 5);
+        let x = 0, y = 0, z = 0;
+        if (side === 0) { x = (Math.random() - 0.5) * 3; y = 0; z = (Math.random() - 0.5) * 2.5; }
+        else if (side === 1) { x = -1.5; y = Math.random() * 2.2; z = (Math.random() - 0.5) * 2.5; }
+        else if (side === 2) { x = 1.5; y = Math.random() * 2.2; z = (Math.random() - 0.5) * 2.5; }
+        else if (side === 3) { x = (Math.random() - 0.5) * 3; y = Math.random() * 2.2; z = -1.25; }
+        else { x = (Math.random() - 0.5) * 3; y = Math.random() * 2.2; z = 1.25; }
+
+        pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+        const mixed = cClay.clone().lerp(cCyan, Math.random());
+        col[i * 3] = mixed.r; col[i * 3 + 1] = mixed.g; col[i * 3 + 2] = mixed.b;
+      }
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+
+      const mat = new THREE.PointsMaterial({ size: 0.035, vertexColors: true, transparent: true, opacity: 0.85 });
+      const points = new THREE.Points(geo, mat);
+      scene.add(points);
+      lidarGlobals.pointsObj = points;
+
+      // 2. Wireframe / Mesh Room Box
+      const boxGeo = new THREE.BoxGeometry(3.0, 2.2, 2.5);
+      const wireMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, transparent: true, opacity: 0.4 });
+      const meshRoom = new THREE.Mesh(boxGeo, wireMat);
+      meshRoom.position.y = 1.1;
+      meshRoom.visible = false;
+      scene.add(meshRoom);
+      lidarGlobals.meshObj = meshRoom;
+
+      // Coordinate reference grid
+      const grid = new THREE.GridHelper(3.2, 12, 0xc25e38, 0x27272a);
+      grid.position.y = -0.01;
+      scene.add(grid);
+
+      function loop() {
+        requestAnimationFrame(loop);
+        points.rotation.y += 0.002;
+        meshRoom.rotation.y += 0.002;
+        renderer.render(scene, camera);
+      }
+      loop();
+
+      window.handleLidarResize = () => {
+        if (!el.clientWidth || !el.clientHeight) return;
+        camera.aspect = el.clientWidth / el.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(el.clientWidth, el.clientHeight);
+      };
+      window.addEventListener('resize', window.handleLidarResize);
+    }
+
+    window.setLidarRenderMode = function(mode) {
+      appState.lidarMode = mode;
+      const btnP = document.getElementById('btn-lidar-points');
+      const btnM = document.getElementById('btn-lidar-mesh');
+      if (mode === 'points') {
+        btnP.className = "px-2.5 py-1 rounded bg-white font-semibold text-slate-900 shadow-sm transition";
+        btnM.className = "px-2.5 py-1 rounded text-slate-600 hover:text-slate-900 transition";
+        if (lidarGlobals.pointsObj) lidarGlobals.pointsObj.visible = true;
+        if (lidarGlobals.meshObj) lidarGlobals.meshObj.visible = false;
+      } else {
+        btnM.className = "px-2.5 py-1 rounded bg-white font-semibold text-slate-900 shadow-sm transition";
+        btnP.className = "px-2.5 py-1 rounded text-slate-600 hover:text-slate-900 transition";
+        if (lidarGlobals.pointsObj) lidarGlobals.pointsObj.visible = false;
+        if (lidarGlobals.meshObj) lidarGlobals.meshObj.visible = true;
+      }
+    };
+
+    let roomGlobals = {
+      scene: null, camera: null, renderer: null,
+      wallMaterial: null, floorMaterial: null,
+      bathMesh: null, showerMesh: null
+    };
+
+    function update3DWallTextures() {
+      if (!roomGlobals.wallMaterial) return;
+      const { diffuse, bump } = generateWallTexture(appState.wallPreset);
+      const diffTex = new THREE.CanvasTexture(diffuse);
+      diffTex.wrapS = THREE.RepeatWrapping; diffTex.wrapT = THREE.RepeatWrapping; diffTex.repeat.set(2, 1);
+      const bumpTex = new THREE.CanvasTexture(bump);
+      bumpTex.wrapS = THREE.RepeatWrapping; bumpTex.wrapT = THREE.RepeatWrapping; bumpTex.repeat.set(2, 1);
+      roomGlobals.wallMaterial.map = diffTex;
+      roomGlobals.wallMaterial.bumpMap = bumpTex;
+      roomGlobals.wallMaterial.bumpScale = 0.05;
+      roomGlobals.wallMaterial.needsUpdate = true;
+    }
+
+    function update3DFloorTexture() {
+      if (!roomGlobals.floorMaterial) return;
+      const fCvs = generateFloorTexture(appState.floorPreset);
+      const fTex = new THREE.CanvasTexture(fCvs);
+      fTex.wrapS = THREE.RepeatWrapping; fTex.wrapT = THREE.RepeatWrapping; fTex.repeat.set(2, 2);
+      roomGlobals.floorMaterial.map = fTex;
+      roomGlobals.floorMaterial.needsUpdate = true;
+    }
+
+    function update3DFixtureModel() {
+      if (!roomGlobals.bathMesh || !roomGlobals.showerMesh) return;
+      if (appState.fixtureType === 'bath') {
+        roomGlobals.bathMesh.visible = true;
+        roomGlobals.showerMesh.visible = false;
+      } else {
+        roomGlobals.bathMesh.visible = false;
+        roomGlobals.showerMesh.visible = true;
+      }
+    }
+
+    function initRoomVisualizer3D() {
+      const el = document.getElementById('room-canvas-container');
+      if (!el) return;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0c0e11);
+      roomGlobals.scene = scene;
+
+      const camera = new THREE.PerspectiveCamera(45, el.clientWidth / el.clientHeight, 0.1, 100);
+      camera.position.set(2.4, 2.2, 3.2);
+      camera.lookAt(0, 0.7, 0);
+      roomGlobals.camera = camera;
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(el.clientWidth, el.clientHeight);
+      el.appendChild(renderer.domElement);
+      roomGlobals.renderer = renderer;
+
+      // Calibrated Studio Lighting (prevents whiteout)
+      const ambientLight = new THREE.AmbientLight(0xfffbeb, 0.45);
+      scene.add(ambientLight);
+
+      const mainLight = new THREE.DirectionalLight(0xfff7ed, 0.85);
+      mainLight.position.set(2.5, 4.0, 2.0);
+      scene.add(mainLight);
+
+      const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.35);
+      fillLight.position.set(-3.0, 2.0, -1.0);
+      scene.add(fillLight);
+
+      // WALL MATERIAL
+      const { diffuse: wDiff, bump: wBump } = generateWallTexture('calacatta');
+      const wDiffTex = new THREE.CanvasTexture(wDiff);
+      wDiffTex.wrapS = THREE.RepeatWrapping; wDiffTex.wrapT = THREE.RepeatWrapping; wDiffTex.repeat.set(2, 1);
+      const wBumpTex = new THREE.CanvasTexture(wBump);
+      wBumpTex.wrapS = THREE.RepeatWrapping; wBumpTex.wrapT = THREE.RepeatWrapping; wBumpTex.repeat.set(2, 1);
+
+      const wallMat = new THREE.MeshStandardMaterial({
+        map: wDiffTex, bumpMap: wBumpTex, bumpScale: 0.05,
+        roughness: 0.35, metalness: 0.05
+      });
+      roomGlobals.wallMaterial = wallMat;
+
+      // Back Wall
+      const backWall = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.2), wallMat);
+      backWall.position.set(0, 1.1, -1.1);
+      scene.add(backWall);
+
+      // Left Wall
+      const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.2), wallMat);
+      leftWall.position.set(-1.3, 1.1, 0);
+      leftWall.rotation.y = Math.PI / 2;
+      scene.add(leftWall);
+
+      // Right Wall Corner
+      const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 2.2), wallMat);
+      rightWall.position.set(1.3, 1.1, -0.6);
+      rightWall.rotation.y = -Math.PI / 2;
+      scene.add(rightWall);
+
+      // FLOOR MATERIAL
+      const fCvs = generateFloorTexture('slate');
+      const fTex = new THREE.CanvasTexture(fCvs);
+      fTex.wrapS = THREE.RepeatWrapping; fTex.wrapT = THREE.RepeatWrapping; fTex.repeat.set(2, 2);
+      const floorMat = new THREE.MeshStandardMaterial({ map: fTex, roughness: 0.5, metalness: 0.1 });
+      roomGlobals.floorMaterial = floorMat;
+
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.2), floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      // 1. Bathtub Model Group
+      const bathGroup = new THREE.Group();
+      const bathBody = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.55, 1.6),
+        new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 })
+      );
+      bathBody.position.set(-0.8, 0.275, -0.2);
+      bathGroup.add(bathBody);
+      scene.add(bathGroup);
+      roomGlobals.bathMesh = bathGroup;
+
+      // 2. Walk-in Shower Model Group
+      const showerGroup = new THREE.Group();
+      const showerPan = new THREE.Mesh(
+        new THREE.BoxGeometry(0.85, 0.08, 0.85),
+        new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1 })
+      );
+      showerPan.position.set(-0.8, 0.04, -0.6);
+      showerGroup.add(showerPan);
+
+      const glassWall = new THREE.Mesh(
+        new THREE.BoxGeometry(0.02, 1.8, 0.85),
+        new THREE.MeshPhysicalMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, roughness: 0.1, transmission: 0.9 })
+      );
+      glassWall.position.set(-0.38, 0.95, -0.6);
+      showerGroup.add(glassWall);
+      showerGroup.visible = false;
+      scene.add(showerGroup);
+      roomGlobals.showerMesh = showerGroup;
+
+      // Chrome Shower Column
+      const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.15 });
+      const mixerPole = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.1), chromeMat);
+      mixerPole.position.set(-1.25, 1.1, -0.2);
+      scene.add(mixerPole);
+
+      // Touch & Mouse Orbit Drag Controls
+      let isDragging = false, prevMouseX = 0, targetRotY = 0, currentRotY = 0;
+      el.addEventListener('mousedown', (e) => { isDragging = true; prevMouseX = e.clientX; });
+      window.addEventListener('mouseup', () => { isDragging = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const delta = e.clientX - prevMouseX;
+        prevMouseX = e.clientX;
+        targetRotY += delta * 0.008;
+      });
+
+      el.addEventListener('touchstart', (e) => { if (e.touches.length === 1) { isDragging = true; prevMouseX = e.touches[0].clientX; } }, { passive: true });
+      window.addEventListener('touchend', () => { isDragging = false; });
+      window.addEventListener('touchmove', (e) => {
+        if (!isDragging || e.touches.length !== 1) return;
+        const delta = e.touches[0].clientX - prevMouseX;
+        prevMouseX = e.touches[0].clientX;
+        targetRotY += delta * 0.008;
+      }, { passive: true });
+
+      function loop() {
+        requestAnimationFrame(loop);
+        currentRotY += (targetRotY - currentRotY) * 0.08;
+        const idle = isDragging ? 0 : Math.sin(Date.now() * 0.0006) * 0.025;
+        scene.rotation.y = currentRotY + idle;
+        renderer.render(scene, camera);
+      }
+      loop();
+
+      window.handleRoomResize = () => {
+        if (!el.clientWidth || !el.clientHeight) return;
+        camera.aspect = el.clientWidth / el.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(el.clientWidth, el.clientHeight);
+      };
+      window.addEventListener('resize', window.handleRoomResize);
+    }
+
+    /* TOAST AND TRANSACTION FEEDBACK */
+    function displayToast(head, body) {
+      const toast = document.getElementById('minimal-toast');
+      document.getElementById('toast-head').innerText = head;
+      document.getElementById('toast-body').innerText = body;
+      toast.classList.remove('translate-y-24', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-24', 'opacity-0');
+      }, 3000);
+    }
+
+    function triggerPaymentDone() {
+      displayToast("Аванс 5 000 ₽ получен", "Чек 54-ФЗ отправлен заказчику по SMS");
+      setTimeout(() => switchScreen(1), 2400);
+    }
+
+    function triggerPassportSent() {
+      displayToast("Паспорт замера отправлен", "SMS ушло клиенту, лид передан в CRM");
+      setTimeout(() => switchScreen(1), 2400);
+    }
+  </script>
+</body>
+</html>
